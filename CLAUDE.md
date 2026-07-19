@@ -80,6 +80,7 @@ is original to RemoteWatch.
 ```
 backend/
   app.py          FastAPI: JSON API + serves frontend/ (StaticFiles mounted at / last)
+  gate.py         BasicAuthMiddleware — gates the whole app (GUI + API) behind a username/password
   keygen.py       generate SECP224R1 key pairs → .keys files
   reports.py      fetch + decrypt FindMy reports → SQLite; AuthMissing if not signed in
   apple_auth.py   two-phase web login (begin/submit), auth.json read/write, sign_out
@@ -90,7 +91,7 @@ frontend/
   index.html      shell: sidebar + Trackers/Map views, modal-root
   app.js          vanilla JS SPA (no build step): data load, render, modals, Leaflet map
   styles.css      design-system tokens + components vendored verbatim (see §6)
-keys/             runtime data — .keys, auth.json, reports.db (all gitignored; .gitkeep tracked)
+keys/             runtime data — .keys, auth.json, reports.db, gate.env (all gitignored; .gitkeep tracked)
 requirements.txt  fastapi, uvicorn, requests, urllib3, cryptography, srp, certifi, python-multipart
 ```
 
@@ -105,7 +106,8 @@ requirements.txt  fastapi, uvicorn, requests, urllib3, cryptography, srp, certif
 - `GET  /` (index), `GET /health` → `ok`
 
 **Env vars:** `REMOTEWATCH_KEYS_DIR` (default `<repo>/keys`), `ANISETTE_URL`
-(default `http://localhost:6969`).
+(default `http://localhost:6969`), `REMOTEWATCH_USERNAME` / `REMOTEWATCH_PASSWORD`
+(GUI Basic Auth gate — see §5 and §7b).
 
 ---
 
@@ -120,8 +122,21 @@ requirements.txt  fastapi, uvicorn, requests, urllib3, cryptography, srp, certif
   Written chmod 600.
 - **Path traversal is blocked** in `store.key_path()` (used by download/delete).
   Keep that guard if you add file-addressing endpoints.
-- The `.gitignore` excludes `keys/*.keys`, `auth.json`, `reports.db`. Never
-  commit runtime data.
+- The `.gitignore` excludes `keys/*.keys`, `auth.json`, `reports.db`,
+  `gate.env`. Never commit runtime data.
+- **The whole app sits behind `BasicAuthMiddleware` (`backend/gate.py`).**
+  This is a separate concern from Apple auth (`apple_auth.py`) — it gates
+  *entry to RemoteWatch itself*, not the FindMy network. Credentials come
+  from `REMOTEWATCH_USERNAME` / `REMOTEWATCH_PASSWORD`; if either is unset
+  the gate no-ops (this is intentional, for local dev — see §7's smoke-test
+  recipe, which relies on it being open). `/health` is always open, everything
+  else 401s without valid creds. Constant-time compare via
+  `secrets.compare_digest`. Production credentials live in `keys/gate.env`
+  (chmod 600, gitignored), loaded by the systemd unit's `EnvironmentFile=`.
+  Do not weaken this to a session cookie / JWT without a real reason — Basic
+  Auth was chosen deliberately here: no extra dependency, no session state to
+  manage, and the browser's native credential caching is enough for a
+  single-operator dashboard.
 
 ---
 
@@ -211,6 +226,57 @@ To exercise the Map/fixes views without real Apple data, seed
 `keys/reports.db` directly (table `reports(id_short, timestamp, datePublished,
 payload, id, statusCode, lat, lon, conf)`; `id_short` = the key `name`,
 `lat`/`lon` stored as TEXT).
+
+---
+
+## 7b. Production deployment — this is live, not hypothetical
+
+RemoteWatch runs on the Pi right now at **https://track.calvingunther.com**,
+gated by the Basic Auth in `backend/gate.py`. This section documents the
+actual deployed state so a future session doesn't have to rediscover it.
+
+- **App process:** `~/.config/systemd/user/remotewatch.service` — a **user**
+  systemd unit (not `/etc/systemd/system`), matching the convention already
+  established by the sibling `location-vault` project on this box. Linger is
+  enabled for `calvingunther66`, so it survives logout/reboot.
+  `systemctl --user status|restart|logs remotewatch.service`.
+  Binds to `127.0.0.1:8100` only — it's reached exclusively through the
+  tunnel, not the LAN, so there's no reason to expose it on `0.0.0.0` in
+  production (the §7 dev recipe still uses `0.0.0.0` for local network
+  testing, which is fine — that path has no tunnel in front of it).
+- **Venv:** `backend/.venv` (gitignored), created with
+  `python3 -m venv backend/.venv && backend/.venv/bin/pip install -r requirements.txt cffi`.
+- **Credentials:** `keys/gate.env` (chmod 600, gitignored — added to
+  `.gitignore` alongside the other runtime secrets), loaded via the unit's
+  `EnvironmentFile=`. Contains `REMOTEWATCH_USERNAME` and
+  `REMOTEWATCH_PASSWORD`. To rotate the password: edit the file, then
+  `systemctl --user restart remotewatch.service`.
+- **Tunnel:** reuses the existing **`integratedos`** Cloudflare tunnel
+  (id `effaf65b-5c9b-4269-b937-e14aac518bcc`, system-level
+  `cloudflared.service`, config at `/etc/cloudflared/config.yml` — root-owned,
+  edits need `sudo`). The ingress list now has a `track.calvingunther.com` →
+  `http://localhost:8100` rule ahead of the catch-all `http_status:404`. A
+  backup of the pre-RemoteWatch config was left at
+  `/etc/cloudflared/config.yml.bak-pre-remotewatch`. Before this change the
+  tunnel had zero hostname routes (catch-all 404 only) and no subdomains of
+  `calvingunther.com` were registered — so this was the first service wired
+  through it; if you add another, add another ingress `hostname:` entry
+  above the catch-all rather than standing up a second tunnel.
+- **DNS:** the CNAME was created with
+  `sudo TUNNEL_ORIGIN_CERT=/root/.cloudflared/cert.pem cloudflared tunnel route dns integratedos track.calvingunther.com`
+  (proxied/orange-cloud, so public resolvers see Cloudflare edge IPs, not a
+  literal CNAME — that's expected). **Gotcha:** the Pi's own local resolver
+  (Tailscale MagicDNS at `100.100.100.100`, chained through pi-hole) can
+  negative-cache a freshly-created record for a while — if `curl
+  https://track.calvingunther.com/...` fails to resolve *from the Pi itself*
+  right after a DNS change, that's local cache staleness, not a real
+  problem. Verify with `dig track.calvingunther.com @1.1.1.1` or
+  `curl --resolve track.calvingunther.com:443:<edge-ip> ...` instead of
+  trusting the local resolver immediately after a change.
+- **Restart order after touching the tunnel config:** edit
+  `/etc/cloudflared/config.yml` → `sudo systemctl restart cloudflared.service`.
+  That service is shared infra (other future subdomains will hang off the
+  same tunnel) — treat edits to it with more care than app-level changes.
 
 ---
 

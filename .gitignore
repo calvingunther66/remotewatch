@@ -4,6 +4,7 @@ keys/*.keys
 keys/auth.json
 keys/reports.db
 keys/reports.db-journal
+keys/gate.env
 
 # Python
 __pycache__/

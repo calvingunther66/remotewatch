@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import apple_auth
+from .gate import BasicAuthMiddleware
 from .keygen import generate_keys
 from .reports import AuthMissing, fetch_reports
 from .store import (
@@ -24,6 +25,7 @@ KEYS_DIR = keys_dir_default()
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "frontend")
 
 app = FastAPI(title="RemoteWatch", description="FindMy AirTag key generation & tracking")
+app.add_middleware(BasicAuthMiddleware)
 
 
 # ---------- request models ----------
