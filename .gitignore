@@ -1,0 +1,21 @@
+# Runtime data — generated keys, Apple auth token, and the reports cache.
+# These are secrets / device state and must never be committed.
+keys/*.keys
+keys/auth.json
+keys/reports.db
+keys/reports.db-journal
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Anisette provisioning cache (if pyprovision is used)
+anisette/
+
+# OS / editor
+.DS_Store
+*.swp

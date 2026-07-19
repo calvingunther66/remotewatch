@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en" style="height:100%">
+<head>
+  <meta charset="utf-8">
+  <title>RemoteWatch</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+</head>
+<body>
+  <div class="shell">
+    <nav class="sidebar">
+      <div class="brand"><span class="dot"></span><span>RemoteWatch</span></div>
+      <button class="nav-item active" data-view="trackers"><span class="icon">◎</span><span class="label">Trackers</span></button>
+      <button class="nav-item" data-view="map"><span class="icon">⌖</span><span class="label">Map</span></button>
+      <div class="nav-spacer"></div>
+      <div class="nav-user">
+        <b id="nav-account">not connected</b>
+        <span id="nav-account-sub">Apple ID · FindMy</span>
+      </div>
+    </nav>
+
+    <main class="main">
+      <h1 class="page-title">Trackers</h1>
+      <span class="page-sub" id="page-sub">clone AirTags, generate keys, watch them on the FindMy network</span>
+
+      <div class="toolbar">
+        <button class="primary" id="btn-create">＋ Create .keys</button>
+        <button id="btn-refresh"><span id="refresh-label">↻ Refresh locations</span></button>
+        <span id="auth-badge"></span>
+        <div style="flex:1"></div>
+        <label class="field" style="flex-direction:row;align-items:center;gap:6px;font-style:normal">
+          <span class="muted" style="font-style:italic">window</span>
+          <select id="hours" style="width:auto">
+            <option value="24">24 h</option>
+            <option value="48">48 h</option>
+            <option value="72">3 d</option>
+            <option value="168">7 d</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="msg"></div>
+
+      <!-- Trackers view -->
+      <section id="view-trackers">
+        <div class="grid tiles" id="stat-tiles" style="margin-bottom:24px"></div>
+
+        <div class="card" style="padding:6px 10px 4px">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:26px"></th>
+                <th>name</th>
+                <th>mac</th>
+                <th>last seen</th>
+                <th class="num">reports</th>
+                <th class="num">position</th>
+                <th style="width:170px"></th>
+              </tr>
+            </thead>
+            <tbody id="keys-body"></tbody>
+          </table>
+          <div class="empty" id="keys-empty" style="display:none">
+            no keys yet — hit “Create .keys” to mint your first tracker
+          </div>
+        </div>
+      </section>
+
+      <!-- Map view -->
+      <section id="view-map" style="display:none">
+        <div id="map"></div>
+        <div class="section-head"><h2>recent fixes</h2><span class="muted" id="map-count"></span></div>
+        <div class="card" style="padding:6px 10px 4px">
+          <table>
+            <thead><tr><th>tracker</th><th>time</th><th class="num">lat</th><th class="num">lon</th><th class="num">conf</th></tr></thead>
+            <tbody id="fixes-body"></tbody>
+          </table>
+          <div class="empty" id="fixes-empty" style="display:none">no location reports cached yet</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal-root"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>

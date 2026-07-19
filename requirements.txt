@@ -1,0 +1,13 @@
+# Web layer
+fastapi~=0.104.1
+uvicorn~=0.24.0.post1
+python-multipart
+
+# Apple FindMy network + crypto (from FindMyFlipper/AirTagGeneration).
+# The original pins pbkdf2 + pycryptodome; RemoteWatch uses stdlib
+# hashlib.pbkdf2_hmac instead, so neither is required.
+requests~=2.31.0
+urllib3~=2.1.0
+cryptography~=41.0.7
+srp~=1.0.20
+certifi
